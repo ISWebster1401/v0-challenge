@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 
 class Article(BaseModel):
     id: str
@@ -22,4 +22,13 @@ class HealthResponse(BaseModel):
     status: str
     cache_size: int
     cache_age_seconds: Optional[int] = None
+
+class FullSummaryRequest(BaseModel):
+    url: str
+
+class FullSummaryResponse(BaseModel):
+    summary: str
+    word_count: int
+    url: str
+    cached: bool = False
 

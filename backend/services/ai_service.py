@@ -68,4 +68,40 @@ Summary:"""
         # Process all articles in parallel
         tasks = [summarize_one(article) for article in articles]
         return await asyncio.gather(*tasks)
+    
+    def summarize_full_article(self, title: str, content: str) -> str:
+        """
+        Generate a comprehensive 5-7 sentence summary of a full article
+        
+        Args:
+            title: Article title
+            content: Full article text content
+            
+        Returns:
+            AI-generated comprehensive summary string
+        """
+        prompt = f"""Provide a comprehensive 5-7 sentence summary of this tech news article, covering all key points, implications, and context.
+
+Title: {title}
+
+Article Content:
+{content[:4000]}  # Limit to 4000 chars to stay within token limits
+
+Comprehensive Summary:"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a tech news analyst. Create comprehensive, detailed summaries that cover all important aspects of the article."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=400,
+                temperature=0.7
+            )
+            
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"Error generating full summary: {e}")
+            raise Exception(f"Failed to generate summary: {str(e)}")
 
