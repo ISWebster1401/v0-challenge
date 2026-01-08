@@ -13,15 +13,15 @@ export default function FullSummaryModal({ isOpen, onClose, summary, wordCount, 
         ></div>
 
         {/* Modal panel */}
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+        <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+          <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-2xl font-bold text-gray-900" id="modal-title">
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100" id="modal-title">
                 {articleTitle || 'Full Article Summary'}
               </h3>
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 focus:outline-none"
               >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -31,14 +31,14 @@ export default function FullSummaryModal({ isOpen, onClose, summary, wordCount, 
 
             {loading && (
               <div className="text-center py-8">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
-                <p className="mt-4 text-gray-600 font-semibold">Generating comprehensive summary...</p>
-                <p className="mt-2 text-gray-500 text-sm">This may take a few seconds</p>
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 dark:border-blue-400"></div>
+                <p className="mt-4 text-gray-600 dark:text-gray-400 font-semibold">Generating comprehensive summary...</p>
+                <p className="mt-2 text-gray-500 dark:text-gray-500 text-sm">This may take a few seconds</p>
               </div>
             )}
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
                 <p className="font-semibold">Error generating summary</p>
                 <p className="text-sm mt-1">{error}</p>
               </div>
@@ -46,12 +46,12 @@ export default function FullSummaryModal({ isOpen, onClose, summary, wordCount, 
 
             {summary && !loading && (
               <div>
-                <div className="flex items-center justify-between mb-4 text-sm text-gray-600">
+                <div className="flex items-center justify-between mb-4 text-sm text-gray-600 dark:text-gray-400">
                   <span className="font-semibold">Comprehensive Summary</span>
                   <span>{wordCount} words</span>
                 </div>
                 <div className="prose max-w-none">
-                  <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
                     {summary}
                   </p>
                 </div>
@@ -59,12 +59,12 @@ export default function FullSummaryModal({ isOpen, onClose, summary, wordCount, 
             )}
 
             {articleUrl && (
-              <div className="mt-6 pt-4 border-t">
+              <div className="mt-6 pt-4 border-t dark:border-gray-700">
                 <a
                   href={articleUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center text-blue-600 hover:text-blue-800 font-semibold"
+                  className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold"
                 >
                   Read original article
                   <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -75,11 +75,11 @@ export default function FullSummaryModal({ isOpen, onClose, summary, wordCount, 
             )}
           </div>
           
-          <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+          <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
             <button
               type="button"
               onClick={onClose}
-              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 dark:bg-blue-700 text-base font-medium text-white hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
             >
               Close
             </button>

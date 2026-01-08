@@ -16,22 +16,30 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [topics, setTopics] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  // Filter articles based on search term and topic
+  // Import topic extractor keywords for better filtering
+  const topicKeywords = {
+    'AI': ['ai', 'artificial intelligence', 'machine learning', 'ml', 'neural network', 'deep learning', 'gpt', 'chatgpt', 'llm', 'openai', 'claude', 'gemini'],
+    'Crypto': ['crypto', 'cryptocurrency', 'bitcoin', 'ethereum', 'blockchain', 'nft', 'web3', 'defi', 'btc', 'eth'],
+    'Hardware': ['hardware', 'cpu', 'gpu', 'processor', 'chip', 'intel', 'amd', 'nvidia', 'qualcomm', 'apple silicon', 'm1', 'm2', 'm3'],
+    'Software': ['software', 'app', 'application', 'os', 'operating system', 'windows', 'linux', 'macos', 'ios', 'android'],
+    'Startup': ['startup', 'unicorn', 'ipo', 'funding', 'venture capital', 'vc', 'series a', 'series b', 'seed round'],
+    'Gaming': ['gaming', 'game', 'playstation', 'xbox', 'nintendo', 'steam', 'esports', 'gamer', 'console'],
+    'Security': ['security', 'cybersecurity', 'hack', 'breach', 'vulnerability', 'malware', 'ransomware', 'phishing'],
+    'Cloud': ['cloud', 'aws', 'azure', 'gcp', 'google cloud', 'amazon web services', 'serverless', 'kubernetes'],
+    'Mobile': ['mobile', 'smartphone', 'iphone', 'android phone', 'samsung', 'apple', 'ios', 'android'],
+    'Social Media': ['twitter', 'facebook', 'instagram', 'tiktok', 'linkedin', 'social media', 'meta'],
+    'Electric Vehicles': ['ev', 'electric vehicle', 'tesla', 'electric car', 'battery', 'charging'],
+    'Space': ['space', 'nasa', 'spacex', 'rocket', 'satellite', 'mars', 'moon', 'astronaut']
+  };
+
+  // Filter articles based on search term only (topic filtering is now done server-side)
   const filteredArticles = React.useMemo(() => {
     let filtered = articles;
 
-    // Apply topic filter
-    if (selectedTopic) {
-      const topicLower = selectedTopic.toLowerCase();
-      filtered = filtered.filter(article => {
-        const title = article.title.toLowerCase();
-        const summary = article.summary.toLowerCase();
-        return title.includes(topicLower) || summary.includes(topicLower);
-      });
-    }
-
-    // Apply search filter
+    // Apply search filter (topic filtering is done server-side when topic is selected)
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(article => 
@@ -42,16 +50,18 @@ function App() {
     }
 
     return filtered;
-  }, [articles, searchTerm, selectedTopic]);
+  }, [articles, searchTerm]);
 
-  const fetchNews = async (from = null, to = null) => {
+  const fetchNews = async (from = null, to = null, page = 1, topic = null) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await newsAPI.getNews(10, from, to);
+      const data = await newsAPI.getNews(10, from, to, page, topic);
       setArticles(data.articles);
       setCacheAge(data.cache_age);
       setTopics(data.topics || []);
+      setCurrentPage(data.current_page || 1);
+      setTotalPages(data.total_pages || 1);
     } catch (err) {
       setError(err.response?.data?.detail || err.message);
       console.error('Error fetching news:', err);
@@ -63,9 +73,12 @@ function App() {
   const handleRefresh = async () => {
     try {
       setLoading(true);
-      const data = await newsAPI.refreshNews(10, fromDate, toDate);
+      setCurrentPage(1); // Reset to first page on refresh
+      const data = await newsAPI.refreshNews(10, fromDate, toDate, 1);
       setArticles(data.articles);
       setCacheAge(0);
+      setTopics(data.topics || []);
+      setTotalPages(data.total_pages || 1);
     } catch (err) {
       setError(err.response?.data?.detail || err.message);
       console.error('Error refreshing news:', err);
@@ -77,23 +90,40 @@ function App() {
   const handleDateFilterChange = async (from, to) => {
     setFromDate(from);
     setToDate(to);
-    await fetchNews(from, to);
+    setCurrentPage(1); // Reset to first page on date change
+    // Keep topic filter if one is selected
+    await fetchNews(from, to, 1, selectedTopic);
+  };
+
+  const handlePageChange = async (page) => {
+    setCurrentPage(page);
+    await fetchNews(fromDate, toDate, page);
+    // Scroll to top when page changes
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSearch = (term) => {
     setSearchTerm(term);
   };
 
-  const handleTopicClick = (topic) => {
+  const handleTopicClick = async (topic) => {
     if (selectedTopic === topic) {
+      // Deselect topic - fetch without topic filter
       setSelectedTopic(null);
+      setCurrentPage(1);
+      await fetchNews(fromDate, toDate, 1, null);
     } else {
+      // Select topic - fetch with topic filter
       setSelectedTopic(topic);
+      setCurrentPage(1);
+      await fetchNews(fromDate, toDate, 1, topic);
     }
   };
 
-  const handleClearTopic = () => {
+  const handleClearTopic = async () => {
     setSelectedTopic(null);
+    setCurrentPage(1);
+    await fetchNews(fromDate, toDate, 1, null);
   };
 
   useEffect(() => {
@@ -130,7 +160,14 @@ function App() {
           </div>
         )}
         
-        <NewsList articles={filteredArticles} searchTerm={searchTerm} />
+        <NewsList 
+          articles={filteredArticles} 
+          searchTerm={searchTerm}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          isFiltered={searchTerm.trim() !== '' || selectedTopic !== null}
+        />
       </main>
       
       <footer className="bg-white dark:bg-gray-800 border-t dark:border-gray-700 mt-12 py-6 transition-colors duration-300">
