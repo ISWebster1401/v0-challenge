@@ -7,7 +7,8 @@ import re
 class AIService:
     def __init__(self, api_key: str):
         self.client = OpenAI(api_key=api_key)
-        self.model = "gpt-4o-mini"
+        self.model = "gpt-4o-mini"  # For quick summaries
+        self.full_model = "gpt-4o"  # For comprehensive summaries
     
     def summarize_article(self, title: str, description: str) -> str:
         """
@@ -73,7 +74,7 @@ Summary:"""
     
     def summarize_full_article(self, title: str, content: str) -> str:
         """
-        Generate a comprehensive 5-7 sentence summary of a full article
+        Generate a comprehensive, detailed summary of a full article using GPT-4o
         
         Args:
             title: Article title
@@ -82,23 +83,28 @@ Summary:"""
         Returns:
             AI-generated comprehensive summary string
         """
-        prompt = f"""Provide a comprehensive 5-7 sentence summary of this tech news article, covering all key points, implications, and context.
+        prompt = f"""Provide a comprehensive, detailed summary of this tech news article. The summary should:
+- Cover all key points, facts, and developments
+- Explain the implications and context
+- Include relevant background information
+- Be thorough but well-structured (8-12 sentences)
+- Use clear, professional language
 
 Title: {title}
 
 Article Content:
-{content[:4000]}  # Limit to 4000 chars to stay within token limits
+{content[:6000]}  # Increased limit for GPT-4o
 
 Comprehensive Summary:"""
         
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model=self.full_model,
                 messages=[
-                    {"role": "system", "content": "You are a tech news analyst. Create comprehensive, detailed summaries that cover all important aspects of the article."},
+                    {"role": "system", "content": "You are an expert tech news analyst. Create comprehensive, detailed summaries that thoroughly cover all important aspects, implications, and context of the article. Be thorough and insightful."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=400,
+                max_tokens=800,  # Increased for more comprehensive summaries
                 temperature=0.7
             )
             
@@ -106,6 +112,46 @@ Comprehensive Summary:"""
         except Exception as e:
             print(f"Error generating full summary: {e}")
             raise Exception(f"Failed to generate summary: {str(e)}")
+    
+    def explain_better(self, selected_text: str, context: str = "") -> str:
+        """
+        Provide a detailed explanation of selected text using GPT-4o
+        
+        Args:
+            selected_text: The text selected by the user
+            context: Optional context from the article
+            
+        Returns:
+            Detailed explanation of the selected text
+        """
+        prompt = f"""Explain the following selected text in detail. Provide:
+- A clear, comprehensive explanation
+- Relevant context and background
+- Why this information is important
+- Any implications or connections to broader trends
+
+Selected Text:
+{selected_text}
+
+{f'Context from article: {context[:1000]}' if context else ''}
+
+Detailed Explanation:"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.full_model,
+                messages=[
+                    {"role": "system", "content": "You are an expert tech news analyst. Provide clear, detailed explanations that help readers understand complex information. Be thorough and educational."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=500,
+                temperature=0.7
+            )
+            
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"Error generating explanation: {e}")
+            raise Exception(f"Failed to generate explanation: {str(e)}")
     
     def extract_topics_from_titles(self, titles: List[str]) -> List[str]:
         """

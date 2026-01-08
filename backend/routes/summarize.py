@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from datetime import datetime
 import asyncio
 
-from models.schemas import FullSummaryRequest, FullSummaryResponse
+from models.schemas import FullSummaryRequest, FullSummaryResponse, ExplainRequest, ExplainResponse
 from core.cache import cache, full_summary_cache
 from core.rate_limit import check_rate_limit
 from core.dependencies import get_ai_service, get_web_scraper
@@ -109,3 +109,51 @@ async def summarize_full_article(request: FullSummaryRequest):
     except Exception as e:
         print(f"❌ Error generating full summary: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating summary: {str(e)}")
+
+
+@router.post("/explain", response_model=ExplainResponse)
+async def explain_text(request: ExplainRequest):
+    """
+    Provide a detailed explanation of selected text
+    
+    Args:
+        request: ExplainRequest with selected text and optional context
+        
+    Returns:
+        ExplainResponse with detailed explanation
+    """
+    # Check rate limit
+    if not check_rate_limit():
+        raise HTTPException(
+            status_code=429, 
+            detail="Rate limit exceeded. Maximum 10 requests per minute."
+        )
+    
+    if not request.selected_text or len(request.selected_text.strip()) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Selected text must be at least 10 characters long."
+        )
+    
+    print(f"🤖 Explaining selected text: {request.selected_text[:100]}...")
+    
+    # Get AI service
+    ai_service = get_ai_service()
+    
+    try:
+        # Generate explanation using async executor
+        loop = asyncio.get_event_loop()
+        explanation = await loop.run_in_executor(
+            None,
+            ai_service.explain_better,
+            request.selected_text,
+            request.context or ""
+        )
+        
+        print(f"✅ Successfully generated explanation")
+        
+        return ExplainResponse(explanation=explanation)
+        
+    except Exception as e:
+        print(f"❌ Error generating explanation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating explanation: {str(e)}")

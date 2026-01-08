@@ -35,3 +35,9 @@ class FullSummaryResponse(BaseModel):
     url: str
     cached: bool = False
 
+class ExplainRequest(BaseModel):
+    selected_text: str
+    context: Optional[str] = None
+
+class ExplainResponse(BaseModel):
+    explanation: str

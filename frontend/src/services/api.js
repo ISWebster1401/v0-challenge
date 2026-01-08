@@ -46,6 +46,14 @@ export const newsAPI = {
     return response.data;
   },
 
+  async explainText(selectedText, context = null) {
+    const response = await api.post('/api/summarize/explain', { 
+      selected_text: selectedText,
+      context: context 
+    });
+    return response.data;
+  },
+
   async getHealth() {
     const response = await api.get('/health');
     return response.data;
