@@ -138,87 +138,117 @@ class NewsService:
     ) -> List[Dict]:
         """
         Fetch tech news from NewsAPI
-        Uses /everything for date ranges, /top-headlines for recent news
+        Uses /everything for date ranges or topic filtering, /top-headlines only for recent news without filters
         
         Args:
             limit: Number of articles to fetch (max 100)
             from_date: Filter articles published on or after this date (YYYY-MM-DD string)
             to_date: Filter articles published on or before this date (YYYY-MM-DD string)
             topic: Optional topic to filter by (e.g., "AI", "Hardware", "Mobile")
+                   If topic is provided without dates, defaults to last 7 days
             
         Returns:
             List of unique article dictionaries
         """
         async with httpx.AsyncClient() as client:
-            # CRITICAL: Use different endpoints based on date filtering
-            if from_date or to_date:
-                # Calculate default dates if not provided
-                if not to_date:
-                    to_date = datetime.now().strftime("%Y-%m-%d")
-                if not from_date:
-                    # Default to 7 days ago if only to_date provided
-                    from_dt = datetime.now() - timedelta(days=7)
-                    from_date = from_dt.strftime("%Y-%m-%d")
-                
-                # Calculate days in range
-                from_dt = datetime.strptime(from_date, "%Y-%m-%d")
-                to_dt = datetime.strptime(to_date, "%Y-%m-%d")
-                days_diff = (to_dt - from_dt).days + 1
-                
-                # Build query with topic if provided
-                if topic:
-                    topic_keywords = self._get_topic_keywords(topic)
-                    topic_query = " OR ".join([f'"{kw}"' for kw in topic_keywords[:5]])  # Use top 5 keywords
-                    base_query = f"({topic_query}) AND (technology OR tech)"
-                    print(f"🎯 Filtering by topic: {topic} (keywords: {', '.join(topic_keywords[:5])})")
-                else:
-                    base_query = "(technology OR tech OR AI OR startup OR software OR hardware) AND (announcement OR launch OR release OR update OR report)"
-                
-                # For ranges of 5+ days, fetch day-by-day to ensure coverage
-                # This ensures we get articles from ALL days, not just the most recent
-                if days_diff >= 5:
-                    print(f"🔄 Using day-by-day fetching for {days_diff} day range")
-                    raw_articles = await self._fetch_articles_by_day(
-                        client, from_date, to_date, limit_per_day=15, topic=topic
-                    )
-                    # Process raw articles
-                    data = {"articles": raw_articles}
-                else:
-                    # For shorter ranges, use single request
-                    url = f"{self.base_url}/everything"
+            # Special case: "Today" filter (same from_date and to_date, and it's today)
+            # Use /top-headlines for better recent news coverage
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            is_today_filter = (from_date == to_date == today_str) and not topic
+            
+            # CRITICAL: Use /everything endpoint when topic filtering OR date filtering
+            # Only use /top-headlines when there's NO topic AND NO dates, OR when filtering "Today"
+            if from_date or to_date or topic:
+                # If it's a "Today" filter, use /top-headlines for better coverage
+                if is_today_filter:
+                    url = f"{self.base_url}/top-headlines"
                     params = {
                         "apiKey": self.api_key,
-                        "q": base_query,
+                        "category": "technology",
                         "language": "en",
-                        "sortBy": "publishedAt",
-                        "from": from_date,
-                        "to": to_date,
-                        "pageSize": min(100, limit * 10),  # Fetch 10x target, max 100
-                        "domains": "techcrunch.com,theverge.com,wired.com,arstechnica.com,engadget.com,cnet.com,zdnet.com,mashable.com"
+                        "pageSize": min(100, limit * 10)
                     }
                     
                     print(f"🔍 Fetching from: {url}")
-                    print(f"📅 Date range: {from_date} to {to_date}")
+                    print(f"📅 Today's news (using top-headlines for better coverage)")
                     
                     response = await client.get(url, params=params, timeout=30.0)
                     response.raise_for_status()
                     data = response.json()
+                else:
+                    # If topic is provided without dates, default to last 7 days
+                    if topic and not from_date and not to_date:
+                        to_date = datetime.now().strftime("%Y-%m-%d")
+                        from_dt = datetime.now() - timedelta(days=7)
+                        from_date = from_dt.strftime("%Y-%m-%d")
+                        print(f"🎯 Topic filter without dates - defaulting to last 7 days: {from_date} to {to_date}")
+                    
+                    # Calculate default dates if not provided
+                    if not to_date:
+                        to_date = datetime.now().strftime("%Y-%m-%d")
+                    if not from_date:
+                        # Default to 7 days ago if only to_date provided
+                        from_dt = datetime.now() - timedelta(days=7)
+                        from_date = from_dt.strftime("%Y-%m-%d")
+                    
+                    # Calculate days in range
+                    from_dt = datetime.strptime(from_date, "%Y-%m-%d")
+                    to_dt = datetime.strptime(to_date, "%Y-%m-%d")
+                    days_diff = (to_dt - from_dt).days + 1
+                    
+                    # Build query with topic if provided
+                    if topic:
+                        topic_keywords = self._get_topic_keywords(topic)
+                        topic_query = " OR ".join([f'"{kw}"' for kw in topic_keywords[:5]])  # Use top 5 keywords
+                        base_query = f"({topic_query}) AND (technology OR tech)"
+                        print(f"🎯 Filtering by topic: {topic} (keywords: {', '.join(topic_keywords[:5])})")
+                    else:
+                        base_query = "(technology OR tech OR AI OR startup OR software OR hardware) AND (announcement OR launch OR release OR update OR report)"
+                    
+                    # For ranges of 5+ days, fetch day-by-day to ensure coverage
+                    # This ensures we get articles from ALL days, not just the most recent
+                    if days_diff >= 5:
+                        print(f"🔄 Using day-by-day fetching for {days_diff} day range")
+                        raw_articles = await self._fetch_articles_by_day(
+                            client, from_date, to_date, limit_per_day=15, topic=topic
+                        )
+                        # Process raw articles
+                        data = {"articles": raw_articles}
+                    else:
+                        # For shorter ranges, use single request
+                        url = f"{self.base_url}/everything"
+                        params = {
+                            "apiKey": self.api_key,
+                            "q": base_query,
+                            "language": "en",
+                            "sortBy": "publishedAt",
+                            "from": from_date,
+                            "to": to_date,
+                            "pageSize": min(100, limit * 10),  # Fetch 10x target, max 100
+                            "domains": "techcrunch.com,theverge.com,wired.com,arstechnica.com,engadget.com,cnet.com,zdnet.com,mashable.com"
+                        }
+                        
+                        print(f"🔍 Fetching from: {url}")
+                        print(f"📅 Date range: {from_date} to {to_date}")
+                        
+                        response = await client.get(url, params=params, timeout=30.0)
+                        response.raise_for_status()
+                        data = response.json()
             else:
-                # Use /top-headlines for recent news (last 24h)
-                url = f"{self.base_url}/top-headlines"
-                params = {
-                    "apiKey": self.api_key,
-                    "category": "technology",
-                    "language": "en",
-                    "pageSize": limit
-                }
+                # Use /everything with last 30 days for "All News" to show more comprehensive results
+                # This is better than /top-headlines which only shows last 24 hours
+                to_date = datetime.now().strftime("%Y-%m-%d")
+                from_dt = datetime.now() - timedelta(days=30)
+                from_date = from_dt.strftime("%Y-%m-%d")
                 
-                print(f"🔍 Fetching from: {url}")
-                print(f"📅 Recent news (24h)")
-                
-                response = await client.get(url, params=params, timeout=30.0)
-                response.raise_for_status()
-                data = response.json()
+                # For 30-day range, use day-by-day fetching to ensure coverage across all days
+                # This ensures we get articles from ALL days, not just the most recent
+                print(f"🔄 Using day-by-day fetching for All News (30 days)")
+                raw_articles = await self._fetch_articles_by_day(
+                    client, from_date, to_date, limit_per_day=10, topic=None
+                )
+                # Process raw articles
+                data = {"articles": raw_articles}
             
             articles = []
             seen_urls = set()
@@ -268,25 +298,50 @@ class NewsService:
             
             print(f"✅ Total unique articles after dedup: {len(articles)}")
             
-            # ALWAYS apply sampling when date range exists (not just when articles > limit)
-            if from_date or to_date:
-                print(f"🎯 Applying intelligent sampling: {len(articles)} → {limit}")
-                sampled = self._sample_articles_intelligently(
-                    articles, 
-                    limit,
-                    from_date,
-                    to_date
-                )
-                print(f"✅ After sampling: {len(sampled)} articles")
-                return sampled
+            # Check if we used /top-headlines (for "Today" filter)
+            # In that case, we don't have specific dates, so just score and return top articles
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            is_today_filter = (from_date == to_date == today_str) if (from_date and to_date) else False
             
-            # For recent news (no dates), just return top scored articles
-            if len(articles) > limit:
-                print(f"🎯 Scoring and selecting top {limit} articles")
-                scored = self._score_articles(articles)
-                return scored[:limit]
+            # If we used /top-headlines for "Today", just score and return top articles
+            # (No date-based sampling needed since /top-headlines already gives recent news)
+            if is_today_filter and len(articles) > 0:
+                # Check if we have enough articles - if from /top-headlines, we might not have dates set
+                # Just score and return top articles
+                sampling_limit = min(100, len(articles))
+                if len(articles) > sampling_limit:
+                    print(f"🎯 Scoring and selecting top {sampling_limit} articles (Today filter)")
+                    scored = self._score_articles(articles)
+                    return scored[:sampling_limit]
+                else:
+                    print(f"✅ Returning {len(articles)} articles (Today filter)")
+                    scored = self._score_articles(articles)
+                    return scored
             
-            return articles
+            # ALWAYS apply sampling when we have articles from /everything endpoint
+            # This includes both date-filtered requests AND "All News" (which uses last 30 days)
+            # Since we now always use /everything (either in if branch or else branch),
+            # we should always have from_date and to_date set at this point
+            
+            # Ensure we have dates for sampling (should always be true now, but safety check)
+            if not from_date:
+                from_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+            if not to_date:
+                to_date = datetime.now().strftime("%Y-%m-%d")
+            
+            # Apply intelligent sampling to get best articles distributed across the date range
+            # For pagination support, we want to return up to 100 articles (not just limit)
+            # The endpoint will handle pagination from these 100 articles
+            sampling_limit = min(100, len(articles))  # Return up to 100 for pagination
+            print(f"🎯 Applying intelligent sampling: {len(articles)} → {sampling_limit}")
+            sampled = self._sample_articles_intelligently(
+                articles, 
+                sampling_limit,
+                from_date,
+                to_date
+            )
+            print(f"✅ After sampling: {len(sampled)} articles")
+            return sampled
     
     def _score_articles(self, articles: List[Dict]) -> List[Dict]:
         """
@@ -382,7 +437,7 @@ class NewsService:
         if not articles:
             return []
         
-        # Group by day
+        # Group by day first
         by_day = defaultdict(list)
         for article in articles:
             try:
@@ -397,36 +452,63 @@ class NewsService:
         for day in sorted(by_day.keys()):
             print(f"  {day}: {len(by_day[day])} articles")
         
-        # Calculate articles per day
-        days_count = len(by_day)
-        if days_count == 0:
+        if len(by_day) == 0:
             return articles[:target_count]
         
-        per_day = max(1, target_count // days_count)
-        extra = target_count % days_count
+        # Group days into 3-day periods for better distribution
+        # This ensures each page has articles from different time periods
+        sorted_days = sorted([d for d in by_day.keys() if d != "unknown"], reverse=True)  # Newest first
+        unknown_articles = by_day.get("unknown", [])
         
-        print(f"🎯 Taking {per_day} per day + {extra} extra")
+        # Group into 3-day periods
+        periods = []
+        for i in range(0, len(sorted_days), 3):
+            period_days = sorted_days[i:i+3]
+            period_articles = []
+            for day in period_days:
+                period_articles.extend(by_day[day])
+            periods.append({
+                "days": period_days,
+                "articles": period_articles
+            })
         
-        # Sample from each day
+        # Add unknown articles to the most recent period
+        if unknown_articles and periods:
+            periods[0]["articles"].extend(unknown_articles)
+        elif unknown_articles:
+            periods.append({
+                "days": ["unknown"],
+                "articles": unknown_articles
+            })
+        
+        print(f"📅 Grouped into {len(periods)} periods (3 days each)")
+        
+        # Calculate articles per period
+        periods_count = len(periods)
+        per_period = max(1, target_count // periods_count)
+        extra = target_count % periods_count
+        
+        print(f"🎯 Taking {per_period} per period + {extra} extra")
+        
+        # Sample from each period
         result = []
-        sorted_days = sorted(by_day.keys(), reverse=True)  # Newest first
-        
-        for i, day in enumerate(sorted_days):
-            day_articles = by_day[day]
+        for i, period in enumerate(periods):
+            period_articles = period["articles"]
             
-            # Score articles for this day
-            scored = self._score_articles(day_articles)
+            # Score articles for this period
+            scored = self._score_articles(period_articles)
             
-            # How many to take from this day
-            take = per_day
-            if i < extra:  # Distribute extra articles to first N days
+            # How many to take from this period
+            take = per_period
+            if i < extra:  # Distribute extra articles to first N periods
                 take += 1
             
-            # Take top articles
+            # Take top articles from this period
             selected = scored[:take]
             result.extend(selected)
             
-            print(f"  ✓ {day}: Selected {len(selected)} of {len(day_articles)}")
+            period_label = f"{period['days'][0]} to {period['days'][-1]}" if len(period['days']) > 1 else period['days'][0]
+            print(f"  ✓ {period_label}: Selected {len(selected)} of {len(period_articles)}")
         
         return result[:target_count]
 

@@ -109,9 +109,10 @@ async def get_news(
     print(f"🔍 Request params: limit={limit}, from_date={from_date}, to_date={to_date}, topic={topic}, page={page}")
     
     try:
-        # For date ranges, fetch more articles to allow pagination
-        # Fetch up to 100 articles (NewsAPI max) when date filtering is active
-        fetch_limit = 100 if (from_date or to_date) else limit
+        # Always fetch 100 articles for pagination support
+        # "All News" now uses /everything with 30 days, and date ranges also need pagination
+        # The service will apply intelligent sampling to get best articles, then we paginate
+        fetch_limit = 100
         # Fetch news from NewsAPI with date filtering and topic (dates are already strings)
         articles = await news_service.fetch_top_tech_news(limit=fetch_limit, from_date=from_date, to_date=to_date, topic=topic)
         print(f"📦 Received {len(articles)} articles from news_service")
