@@ -29,12 +29,33 @@ app = FastAPI(
 )
 
 # CORS middleware
+# Get allowed origins from environment or use defaults
+allowed_origins_env = os.getenv(
+    "ALLOWED_ORIGINS",
+    "https://v0-challenge-five.vercel.app,http://localhost:5173,http://localhost:3000"
+)
+
+# Split and clean origins
+allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+
+# For production, add regex pattern to allow all Vercel subdomains
+allow_origin_regex = None
+if os.getenv("ENVIRONMENT") == "production":
+    # Allow all *.vercel.app subdomains
+    allow_origin_regex = r"https://.*\.vercel\.app"
+
+print(f"🌐 CORS allowed origins: {allowed_origins}")
+if allow_origin_regex:
+    print(f"🌐 CORS origin regex: {allow_origin_regex}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend domain
+    allow_origins=allowed_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Root endpoint
