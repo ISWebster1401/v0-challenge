@@ -10,14 +10,33 @@ const api = axios.create({
 });
 
 export const newsAPI = {
-  async getNews(limit = 10) {
-    const response = await api.get(`/api/news?limit=${limit}`);
+  async getNews(limit = 10, fromDate = null, toDate = null) {
+    let url = `/api/news?limit=${limit}`;
+    if (fromDate) {
+      url += `&from_date=${fromDate}`;
+    }
+    if (toDate) {
+      url += `&to_date=${toDate}`;
+    }
+    const response = await api.get(url);
     return response.data;
   },
 
-  async refreshNews(limit = 10) {
+  async refreshNews(limit = 10, fromDate = null, toDate = null) {
     // Force refresh by using force_refresh parameter
-    const response = await api.get(`/api/news?limit=${limit}&force_refresh=true`);
+    let url = `/api/news?limit=${limit}&force_refresh=true`;
+    if (fromDate) {
+      url += `&from_date=${fromDate}`;
+    }
+    if (toDate) {
+      url += `&to_date=${toDate}`;
+    }
+    const response = await api.get(url);
+    return response.data;
+  },
+
+  async getFullSummary(url) {
+    const response = await api.post('/api/summarize/full', { url });
     return response.data;
   },
 

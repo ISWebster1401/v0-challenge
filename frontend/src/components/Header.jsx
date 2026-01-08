@@ -1,6 +1,7 @@
 import React from 'react';
+import DateFilter from './DateFilter';
 
-export default function Header({ onRefresh, loading, cacheAge }) {
+export default function Header({ onRefresh, loading, cacheAge, onDateFilterChange }) {
   return (
     <header className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
       <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
@@ -24,6 +25,7 @@ export default function Header({ onRefresh, loading, cacheAge }) {
             Last updated: {Math.floor(cacheAge / 60)} minutes ago
           </p>
         )}
+        <DateFilter onFilterChange={onDateFilterChange} loading={loading} />
       </div>
     </header>
   );

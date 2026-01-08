@@ -9,16 +9,18 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [cacheAge, setCacheAge] = useState(null);
+  const [fromDate, setFromDate] = useState(null);
+  const [toDate, setToDate] = useState(null);
 
-  const fetchNews = async () => {
+  const fetchNews = async (from = null, to = null) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await newsAPI.getNews(10);
+      const data = await newsAPI.getNews(10, from, to);
       setArticles(data.articles);
       setCacheAge(data.cache_age);
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.detail || err.message);
       console.error('Error fetching news:', err);
     } finally {
       setLoading(false);
@@ -28,15 +30,21 @@ function App() {
   const handleRefresh = async () => {
     try {
       setLoading(true);
-      const data = await newsAPI.refreshNews();
+      const data = await newsAPI.refreshNews(10, fromDate, toDate);
       setArticles(data.articles);
       setCacheAge(0);
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.detail || err.message);
       console.error('Error refreshing news:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDateFilterChange = async (from, to) => {
+    setFromDate(from);
+    setToDate(to);
+    await fetchNews(from, to);
   };
 
   useEffect(() => {
@@ -53,6 +61,7 @@ function App() {
         onRefresh={handleRefresh} 
         loading={loading}
         cacheAge={cacheAge}
+        onDateFilterChange={handleDateFilterChange}
       />
       
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
