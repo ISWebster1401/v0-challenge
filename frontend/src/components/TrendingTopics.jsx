@@ -6,7 +6,7 @@ export default function TrendingTopics({ topics, selectedTopic, onTopicClick, on
   }
 
   return (
-    <div className="mt-4 flex flex-wrap gap-2 items-center">
+    <div className="flex flex-wrap gap-2 items-center">
       <span className="text-sm font-semibold text-blue-100 dark:text-blue-200">Trending:</span>
       {topics.map((topic) => (
         <button

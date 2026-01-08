@@ -49,13 +49,15 @@ export default function Header({ onRefresh, loading, cacheAge, onDateFilterChang
           resultCount={searchResultCount || 0}
           totalCount={totalArticleCount || 0}
         />
-        <TrendingTopics
-          topics={topics || []}
-          selectedTopic={selectedTopic}
-          onTopicClick={onTopicClick}
-          onClear={onClearTopic}
-        />
-        <DateFilter onFilterChange={onDateFilterChange} loading={loading} />
+        <div className="flex flex-wrap items-center gap-4 mt-4">
+          <TrendingTopics
+            topics={topics || []}
+            selectedTopic={selectedTopic}
+            onTopicClick={onTopicClick}
+            onClear={onClearTopic}
+          />
+          <DateFilter onFilterChange={onDateFilterChange} loading={loading} />
+        </div>
       </div>
     </header>
   );

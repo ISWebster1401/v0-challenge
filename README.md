@@ -1,5 +1,9 @@
 # 🚀 Tech News Summarizer
 
+> **🌐 Live Demo:** https://v0-challenge-five.vercel.app  
+> **📡 API Docs:** https://your-backend.railway.app/docs
+
+
 A modern, AI-powered web application that fetches the latest tech news and generates intelligent summaries using OpenAI GPT-4o. Built with FastAPI (backend) and React + Vite (frontend).
 
 ![Tech News Summarizer](https://img.shields.io/badge/Status-Production%20Ready-success)

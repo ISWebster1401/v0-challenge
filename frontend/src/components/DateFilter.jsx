@@ -79,56 +79,52 @@ export default function DateFilter({ onFilterChange, loading }) {
   const maxDate = `${chileTime.getFullYear()}-${String(chileTime.getMonth() + 1).padStart(2, '0')}-${String(chileTime.getDate()).padStart(2, '0')}`;
 
   return (
-    <div className="bg-white dark:bg-gray-700 rounded-lg shadow-md p-4 mt-4 transition-colors duration-300">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex flex-wrap gap-2 items-center">
-          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Filter by date:</label>
-          <select
-            value={filterType}
-            onChange={(e) => handleFilterTypeChange(e.target.value)}
-            disabled={loading}
-            className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800"
-          >
-            <option value="all">All News</option>
-            <option value="today">Today </option>
-            <option value="yesterday">Yesterday </option>
-            <option value="last7days">Last 7 Days</option>
-            <option value="custom">Custom Range</option>
-          </select>
-        </div>
+    <div className="flex flex-wrap gap-2 items-center">
+      <label className="text-sm font-semibold text-blue-100 dark:text-blue-200">Filter by date:</label>
+      <select
+        value={filterType}
+        onChange={(e) => handleFilterTypeChange(e.target.value)}
+        disabled={loading}
+        className="px-3 py-1.5 border border-white/30 dark:border-white/20 rounded-md text-sm bg-white/20 dark:bg-white/10 text-white focus:outline-none focus:ring-2 focus:ring-white/50 disabled:opacity-50"
+      >
+        <option value="all" className="bg-gray-800 text-white">All News</option>
+        <option value="today" className="bg-gray-800 text-white">Today</option>
+        <option value="yesterday" className="bg-gray-800 text-white">Yesterday</option>
+        <option value="last7days" className="bg-gray-800 text-white">Last 7 Days</option>
+        <option value="custom" className="bg-gray-800 text-white">Custom Range</option>
+      </select>
 
-        {filterType === 'custom' && (
-          <div className="flex flex-wrap gap-2 items-center">
-            <input
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              max={toDate || maxDate}
-              disabled={loading}
-              className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800"
-              placeholder="From date"
-            />
-            <span className="text-gray-700 dark:text-gray-300 font-medium">to</span>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              min={fromDate}
-              max={maxDate}
-              disabled={loading}
-              className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800"
-              placeholder="To date"
-            />
-            <button
-              onClick={handleApplyCustom}
-              disabled={loading || (!fromDate && !toDate)}
-              className="px-4 py-1.5 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Apply
-            </button>
-          </div>
-        )}
-      </div>
+      {filterType === 'custom' && (
+        <>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            max={toDate || maxDate}
+            disabled={loading}
+            className="px-3 py-1.5 border border-white/30 dark:border-white/20 rounded-md text-sm bg-white/20 dark:bg-white/10 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 disabled:opacity-50"
+            placeholder="From date"
+          />
+          <span className="text-blue-100 dark:text-blue-200 font-medium">to</span>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            min={fromDate}
+            max={maxDate}
+            disabled={loading}
+            className="px-3 py-1.5 border border-white/30 dark:border-white/20 rounded-md text-sm bg-white/20 dark:bg-white/10 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 disabled:opacity-50"
+            placeholder="To date"
+          />
+          <button
+            onClick={handleApplyCustom}
+            disabled={loading || (!fromDate && !toDate)}
+            className="px-4 py-1.5 bg-white/20 text-white rounded-md text-sm font-semibold hover:bg-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Apply
+          </button>
+        </>
+      )}
     </div>
   );
 }

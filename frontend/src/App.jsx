@@ -74,7 +74,7 @@ function App() {
     try {
       setLoading(true);
       setCurrentPage(1); // Reset to first page on refresh
-      const data = await newsAPI.refreshNews(10, fromDate, toDate, 1);
+      const data = await newsAPI.refreshNews(10, fromDate, toDate, 1, selectedTopic);
       setArticles(data.articles);
       setCacheAge(0);
       setTopics(data.topics || []);
@@ -97,7 +97,7 @@ function App() {
 
   const handlePageChange = async (page) => {
     setCurrentPage(page);
-    await fetchNews(fromDate, toDate, page);
+    await fetchNews(fromDate, toDate, page, selectedTopic);
     // Scroll to top when page changes
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
