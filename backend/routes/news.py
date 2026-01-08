@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime
 from typing import Optional
 import asyncio
+import os
 
 from models.schemas import Article, NewsResponse
 from core.cache import cache, get_cache_key_str, is_cache_valid, get_cache_age
