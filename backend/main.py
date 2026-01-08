@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
@@ -61,15 +61,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_cache_key_str(from_date: Optional[str] = None, to_date: Optional[str] = None) -> str:
-    """Generate cache key based on date range (using string dates)"""
+def get_cache_key_str(from_date: Optional[str] = None, to_date: Optional[str] = None, topic: Optional[str] = None) -> str:
+    """Generate cache key based on date range and topic (using string dates)"""
+    date_part = ""
     if from_date and to_date:
-        return f"{from_date}_{to_date}"
+        date_part = f"{from_date}_{to_date}"
     elif from_date:
-        return f"{from_date}_"
+        date_part = f"{from_date}_"
     elif to_date:
-        return f"_{to_date}"
-    return "default"
+        date_part = f"_{to_date}"
+    else:
+        date_part = "default"
+    
+    if topic:
+        return f"{date_part}_topic_{topic.lower()}"
+    return date_part
 
 def is_cache_valid(cache_key: str) -> bool:
     """Check if cache is still valid for given key"""
@@ -130,8 +136,9 @@ async def health_check():
 async def get_news(
     limit: int = 10, 
     force_refresh: bool = False,
-    from_date: Optional[str] = None,
-    to_date: Optional[str] = None,
+    from_date: Optional[str] = Query(None, regex=r"^\d{4}-\d{2}-\d{2}$"),
+    to_date: Optional[str] = Query(None, regex=r"^\d{4}-\d{2}-\d{2}$"),
+    topic: Optional[str] = Query(None, description="Filter by topic (e.g., AI, Hardware, Mobile)"),
     page: int = 1
 ):
     """
@@ -165,8 +172,8 @@ async def get_news(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     
-    # Generate cache key based on date range (use strings directly)
-    cache_key = get_cache_key_str(from_date, to_date)
+    # Generate cache key based on date range and topic (use strings directly)
+    cache_key = get_cache_key_str(from_date, to_date, topic)
     
     # Check cache
     if is_cache_valid(cache_key) and not force_refresh:
@@ -210,15 +217,16 @@ async def get_news(
         )
     
     date_range_str = f" from {from_date} to {to_date}" if from_date or to_date else ""
-    print(f"🔄 Fetching fresh news{date_range_str}...")
-    print(f"🔍 Request params: limit={limit}, from_date={from_date}, to_date={to_date}, page={page}")
+    topic_str = f" (topic: {topic})" if topic else ""
+    print(f"🔄 Fetching fresh news{date_range_str}{topic_str}...")
+    print(f"🔍 Request params: limit={limit}, from_date={from_date}, to_date={to_date}, topic={topic}, page={page}")
     
     try:
         # For date ranges, fetch more articles to allow pagination
         # Fetch up to 100 articles (NewsAPI max) when date filtering is active
         fetch_limit = 100 if (from_date or to_date) else limit
-        # Fetch news from NewsAPI with date filtering (dates are already strings)
-        articles = await news_service.fetch_top_tech_news(limit=fetch_limit, from_date=from_date, to_date=to_date)
+        # Fetch news from NewsAPI with date filtering and topic (dates are already strings)
+        articles = await news_service.fetch_top_tech_news(limit=fetch_limit, from_date=from_date, to_date=to_date, topic=topic)
         print(f"📦 Received {len(articles)} articles from news_service")
         
         if not articles:
@@ -274,9 +282,13 @@ async def get_news(
         raise HTTPException(status_code=500, detail=f"Error fetching news: {str(e)}")
 
 @app.post("/api/refresh")
-async def refresh_cache(from_date: Optional[str] = None, to_date: Optional[str] = None):
-    """Force refresh the news cache for a specific date range"""
-    cache_key = get_cache_key_str(from_date, to_date)
+async def refresh_cache(
+    from_date: Optional[str] = Query(None, regex=r"^\d{4}-\d{2}-\d{2}$"),
+    to_date: Optional[str] = Query(None, regex=r"^\d{4}-\d{2}-\d{2}$"),
+    topic: Optional[str] = Query(None, description="Filter by topic")
+):
+    """Force refresh the news cache for a specific date range and topic"""
+    cache_key = get_cache_key_str(from_date, to_date, topic)
     cache[cache_key]["articles"] = []
     cache[cache_key]["timestamp"] = None
     return {"message": f"Cache cleared for date range: {cache_key}", "status": "success"}

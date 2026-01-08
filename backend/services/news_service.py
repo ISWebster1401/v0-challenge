@@ -34,7 +34,8 @@ class NewsService:
         client: httpx.AsyncClient,
         from_date: str,
         to_date: str,
-        limit_per_day: int = 15
+        limit_per_day: int = 15,
+        topic: Optional[str] = None
     ) -> List[Dict]:
         """
         Fetch articles by making multiple requests, one per day, to ensure
@@ -45,6 +46,7 @@ class NewsService:
             from_date: Start date (YYYY-MM-DD)
             to_date: End date (YYYY-MM-DD)
             limit_per_day: Number of articles to fetch per day
+            topic: Optional topic to filter by
             
         Returns:
             List of article dictionaries (not yet processed)
@@ -55,6 +57,15 @@ class NewsService:
         
         # Calculate days in range
         days_diff = (to_dt - from_dt).days + 1
+        
+        # Build query with topic if provided
+        if topic:
+            topic_keywords = self._get_topic_keywords(topic)
+            topic_query = " OR ".join([f'"{kw}"' for kw in topic_keywords[:5]])  # Use top 5 keywords
+            base_query = f"({topic_query}) AND (technology OR tech)"
+            print(f"🎯 Filtering by topic: {topic} (keywords: {', '.join(topic_keywords[:5])})")
+        else:
+            base_query = "(technology OR tech OR AI OR startup OR software OR hardware OR mobile OR cloud OR security OR robotics OR gaming) AND (announcement OR launch OR release OR update OR report OR news)"
         
         print(f"📅 Fetching articles day-by-day from {days_diff} days ({from_date} to {to_date})")
         
@@ -67,7 +78,7 @@ class NewsService:
             try:
                 params = {
                     "apiKey": self.api_key,
-                    "q": "(technology OR tech OR AI OR startup OR software OR hardware OR mobile OR cloud OR security OR robotics OR gaming) AND (announcement OR launch OR release OR update OR report OR news)",
+                    "q": base_query,
                     "language": "en",
                     "sortBy": "publishedAt",
                     "from": current_date,
@@ -91,11 +102,39 @@ class NewsService:
         
         return all_raw_articles
     
+    def _get_topic_keywords(self, topic: str) -> List[str]:
+        """
+        Get keywords for a topic to use in NewsAPI query
+        
+        Args:
+            topic: Topic name (e.g., "AI", "Hardware", "Mobile")
+            
+        Returns:
+            List of keywords for the topic
+        """
+        topic_keywords = {
+            'AI': ['AI', 'artificial intelligence', 'machine learning', 'ML', 'neural network', 'deep learning', 'GPT', 'ChatGPT', 'LLM', 'OpenAI', 'Claude', 'Gemini'],
+            'Crypto': ['crypto', 'cryptocurrency', 'bitcoin', 'ethereum', 'blockchain', 'NFT', 'Web3', 'DeFi', 'BTC', 'ETH'],
+            'Hardware': ['hardware', 'CPU', 'GPU', 'processor', 'chip', 'Intel', 'AMD', 'Nvidia', 'Qualcomm', 'Apple Silicon', 'M1', 'M2', 'M3'],
+            'Software': ['software', 'app', 'application', 'OS', 'operating system', 'Windows', 'Linux', 'macOS', 'iOS', 'Android'],
+            'Startups': ['startup', 'unicorn', 'IPO', 'funding', 'venture capital', 'VC', 'Series A', 'Series B', 'seed round'],
+            'Gaming': ['gaming', 'game', 'PlayStation', 'Xbox', 'Nintendo', 'Steam', 'esports', 'gamer', 'console'],
+            'Security': ['security', 'cybersecurity', 'hack', 'breach', 'vulnerability', 'malware', 'ransomware', 'phishing'],
+            'Cloud': ['cloud', 'AWS', 'Azure', 'GCP', 'Google Cloud', 'Amazon Web Services', 'serverless', 'Kubernetes'],
+            'Mobile': ['mobile', 'smartphone', 'iPhone', 'Android phone', 'Samsung', 'Apple', 'iOS', 'Android'],
+            'Robotics': ['robotics', 'robot', 'automation', 'autonomous', 'drone', 'AI robot'],
+            'Social Media': ['Twitter', 'Facebook', 'Instagram', 'TikTok', 'LinkedIn', 'social media', 'Meta']
+        }
+        
+        # Return keywords for the topic, or just the topic name if not found
+        return topic_keywords.get(topic, [topic])
+    
     async def fetch_top_tech_news(
         self, 
         limit: int = 10,
         from_date: Optional[str] = None,
-        to_date: Optional[str] = None
+        to_date: Optional[str] = None,
+        topic: Optional[str] = None
     ) -> List[Dict]:
         """
         Fetch tech news from NewsAPI
@@ -105,6 +144,7 @@ class NewsService:
             limit: Number of articles to fetch (max 100)
             from_date: Filter articles published on or after this date (YYYY-MM-DD string)
             to_date: Filter articles published on or before this date (YYYY-MM-DD string)
+            topic: Optional topic to filter by (e.g., "AI", "Hardware", "Mobile")
             
         Returns:
             List of unique article dictionaries
@@ -125,12 +165,21 @@ class NewsService:
                 to_dt = datetime.strptime(to_date, "%Y-%m-%d")
                 days_diff = (to_dt - from_dt).days + 1
                 
+                # Build query with topic if provided
+                if topic:
+                    topic_keywords = self._get_topic_keywords(topic)
+                    topic_query = " OR ".join([f'"{kw}"' for kw in topic_keywords[:5]])  # Use top 5 keywords
+                    base_query = f"({topic_query}) AND (technology OR tech)"
+                    print(f"🎯 Filtering by topic: {topic} (keywords: {', '.join(topic_keywords[:5])})")
+                else:
+                    base_query = "(technology OR tech OR AI OR startup OR software OR hardware) AND (announcement OR launch OR release OR update OR report)"
+                
                 # For ranges of 5+ days, fetch day-by-day to ensure coverage
                 # This ensures we get articles from ALL days, not just the most recent
                 if days_diff >= 5:
                     print(f"🔄 Using day-by-day fetching for {days_diff} day range")
                     raw_articles = await self._fetch_articles_by_day(
-                        client, from_date, to_date, limit_per_day=15
+                        client, from_date, to_date, limit_per_day=15, topic=topic
                     )
                     # Process raw articles
                     data = {"articles": raw_articles}
@@ -139,7 +188,7 @@ class NewsService:
                     url = f"{self.base_url}/everything"
                     params = {
                         "apiKey": self.api_key,
-                        "q": "(technology OR tech OR AI OR startup OR software OR hardware) AND (announcement OR launch OR release OR update OR report)",
+                        "q": base_query,
                         "language": "en",
                         "sortBy": "publishedAt",
                         "from": from_date,
