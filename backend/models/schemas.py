@@ -17,6 +17,7 @@ class NewsResponse(BaseModel):
     count: int
     cached: bool
     cache_age: Optional[int] = None
+    topics: list[str] = []
 
 class HealthResponse(BaseModel):
     status: str

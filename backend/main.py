@@ -12,6 +12,7 @@ from models.schemas import Article, NewsResponse, HealthResponse, FullSummaryReq
 from services.news_service import NewsService
 from services.ai_service import AIService
 from services.web_scraper import WebScraper
+from services.topic_extractor import TopicExtractor
 
 # Load environment variables
 load_dotenv()
@@ -35,6 +36,7 @@ RATE_LIMIT_WINDOW = 60  # seconds
 news_service = NewsService(api_key=os.getenv("NEWS_API_KEY"))
 ai_service = AIService(api_key=os.getenv("OPENAI_API_KEY"))
 web_scraper = WebScraper()
+topic_extractor = TopicExtractor()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -160,11 +162,15 @@ async def get_news(
     if is_cache_valid(cache_key) and not force_refresh:
         print(f"📦 Returning cached results for key: {cache_key}")
         cache_entry = cache[cache_key]
+        # Extract topics from cached articles
+        cached_articles_dict = [{"title": article.title} for article in cache_entry["articles"]]
+        topics = topic_extractor.extract_topics(cached_articles_dict)
         return NewsResponse(
             articles=cache_entry["articles"][:limit],
             count=len(cache_entry["articles"][:limit]),
             cached=True,
-            cache_age=get_cache_age(cache_key)
+            cache_age=get_cache_age(cache_key),
+            topics=topics
         )
     
     date_range_str = f" from {from_date} to {to_date}" if from_date or to_date else ""
@@ -183,6 +189,10 @@ async def get_news(
         # Generate AI summaries
         summarized_articles = await ai_service.summarize_articles_batch(articles)
         
+        # Extract trending topics
+        topics = topic_extractor.extract_topics(summarized_articles)
+        print(f"📊 Extracted {len(topics)} trending topics: {', '.join(topics)}")
+        
         # Update cache for this date range
         cache[cache_key]["articles"] = [Article(**article) for article in summarized_articles]
         cache[cache_key]["timestamp"] = datetime.now()
@@ -194,7 +204,8 @@ async def get_news(
             articles=cache[cache_key]["articles"][:limit],
             count=len(cache[cache_key]["articles"][:limit]),
             cached=False,
-            cache_age=0
+            cache_age=0,
+            topics=topics
         )
         
     except HTTPException:
