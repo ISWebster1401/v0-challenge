@@ -7,10 +7,10 @@ from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
 
-from routes import news, health, summarize
-
-# Load environment variables
+# Load environment variables FIRST, before importing routes
 load_dotenv()
+
+from routes import news, health, summarize
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

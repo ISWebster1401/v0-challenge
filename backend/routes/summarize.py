@@ -6,17 +6,11 @@ from datetime import datetime
 import asyncio
 
 from models.schemas import FullSummaryRequest, FullSummaryResponse
-from services.ai_service import AIService
-from services.web_scraper import WebScraper
 from core.cache import cache, full_summary_cache
 from core.rate_limit import check_rate_limit
-import os
+from core.dependencies import get_ai_service, get_web_scraper
 
 router = APIRouter()
-
-# Initialize services
-ai_service = AIService(api_key=os.getenv("OPENAI_API_KEY"))
-web_scraper = WebScraper()
 
 
 @router.post("/full", response_model=FullSummaryResponse)
@@ -57,6 +51,10 @@ async def summarize_full_article(request: FullSummaryRequest):
             del full_summary_cache[url]
     
     print(f"🔄 Fetching full article content from {url}")
+    
+    # Get services
+    ai_service = get_ai_service()
+    web_scraper = get_web_scraper()
     
     try:
         # Scrape article content

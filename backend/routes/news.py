@@ -7,16 +7,10 @@ from typing import Optional
 import asyncio
 
 from models.schemas import Article, NewsResponse
-from services.news_service import NewsService
-from services.ai_service import AIService
 from core.cache import cache, get_cache_key_str, is_cache_valid, get_cache_age
-import os
+from core.dependencies import get_news_service, get_ai_service
 
 router = APIRouter()
-
-# Initialize services (will be injected or use singleton pattern)
-news_service = NewsService(api_key=os.getenv("NEWS_API_KEY"))
-ai_service = AIService(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 @router.get("", response_model=NewsResponse)
@@ -62,6 +56,10 @@ async def get_news(
     
     # Generate cache key based on date range and topic (use strings directly)
     cache_key = get_cache_key_str(from_date, to_date, topic)
+    
+    # Get services
+    news_service = get_news_service()
+    ai_service = get_ai_service()
     
     # Check cache
     if is_cache_valid(cache_key) and not force_refresh:
