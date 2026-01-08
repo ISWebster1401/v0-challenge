@@ -211,6 +211,7 @@ async def get_news(
     
     date_range_str = f" from {from_date} to {to_date}" if from_date or to_date else ""
     print(f"🔄 Fetching fresh news{date_range_str}...")
+    print(f"🔍 Request params: limit={limit}, from_date={from_date}, to_date={to_date}, page={page}")
     
     try:
         # For date ranges, fetch more articles to allow pagination
@@ -218,6 +219,7 @@ async def get_news(
         fetch_limit = 100 if (from_date or to_date) else limit
         # Fetch news from NewsAPI with date filtering (dates are already strings)
         articles = await news_service.fetch_top_tech_news(limit=fetch_limit, from_date=from_date, to_date=to_date)
+        print(f"📦 Received {len(articles)} articles from news_service")
         
         if not articles:
             raise HTTPException(status_code=404, detail="No articles found for the specified date range")
