@@ -23,10 +23,10 @@ class TopicExtractor:
     
     def extract_topics(self, articles: List[Dict]) -> List[str]:
         """
-        Extract trending topics from article titles
+        Extract trending topics from article titles and summaries
         
         Args:
-            articles: List of article dictionaries with 'title' field
+            articles: List of article dictionaries with 'title' and 'summary' fields
             
         Returns:
             List of top 5-8 topic names sorted by frequency
@@ -39,12 +39,18 @@ class TopicExtractor:
         
         for article in articles:
             title = article.get('title', '').lower()
+            summary = article.get('summary', '').lower()
+            description = article.get('description', '').lower()
+            
+            # Combine all text for better matching
+            combined_text = f"{title} {summary} {description}"
+            
             # Check each topic's keywords
             for topic, keywords in self.TOPIC_KEYWORDS.items():
                 for keyword in keywords:
                     # Use word boundaries for better matching
                     pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
-                    if re.search(pattern, title):
+                    if re.search(pattern, combined_text):
                         topic_counts[topic] += 1
                         break  # Only count once per article per topic
         
@@ -53,3 +59,7 @@ class TopicExtractor:
         
         # Return at least top 5, but up to 8 if available
         return top_topics[:8] if len(top_topics) >= 5 else top_topics
+    
+    def get_topic_keywords(self, topic: str) -> List[str]:
+        """Get keywords for a specific topic"""
+        return self.TOPIC_KEYWORDS.get(topic, [])

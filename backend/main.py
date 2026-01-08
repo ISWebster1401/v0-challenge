@@ -133,16 +133,18 @@ async def get_news(
     limit: int = 10, 
     force_refresh: bool = False,
     from_date: Optional[date] = None,
-    to_date: Optional[date] = None
+    to_date: Optional[date] = None,
+    page: int = 1
 ):
     """
     Get latest tech news with AI summaries, optionally filtered by date range
     
     Args:
-        limit: Number of articles to return (1-100)
+        limit: Number of articles per page (1-100)
         force_refresh: Force cache refresh
         from_date: Filter articles published on or after this date (YYYY-MM-DD)
         to_date: Filter articles published on or before this date (YYYY-MM-DD)
+        page: Page number (starts at 1)
         
     Returns:
         NewsResponse with articles and metadata
@@ -150,6 +152,10 @@ async def get_news(
     # Validate limit
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=400, detail="Limit must be between 1 and 100")
+    
+    # Validate page
+    if page < 1:
+        raise HTTPException(status_code=400, detail="Page must be >= 1")
     
     # Validate date range
     if from_date and to_date and from_date > to_date:
@@ -162,23 +168,45 @@ async def get_news(
     if is_cache_valid(cache_key) and not force_refresh:
         print(f"📦 Returning cached results for key: {cache_key}")
         cache_entry = cache[cache_key]
-        # Extract topics from cached articles
-        cached_articles_dict = [{"title": article.title} for article in cache_entry["articles"]]
+        all_cached_articles = cache_entry["articles"]
+        
+        # Extract topics from cached articles (use full article data)
+        cached_articles_dict = [
+            {
+                "title": article.title,
+                "summary": article.summary,
+                "description": article.description or ""
+            } 
+            for article in all_cached_articles
+        ]
         topics = topic_extractor.extract_topics(cached_articles_dict)
+        
+        # Pagination
+        total_articles = len(all_cached_articles)
+        total_pages = (total_articles + limit - 1) // limit if total_articles > 0 else 1
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        paginated_articles = all_cached_articles[start_idx:end_idx]
+        
         return NewsResponse(
-            articles=cache_entry["articles"][:limit],
-            count=len(cache_entry["articles"][:limit]),
+            articles=paginated_articles,
+            count=len(paginated_articles),
             cached=True,
             cache_age=get_cache_age(cache_key),
-            topics=topics
+            topics=topics,
+            total_pages=total_pages,
+            current_page=page
         )
     
     date_range_str = f" from {from_date} to {to_date}" if from_date or to_date else ""
     print(f"🔄 Fetching fresh news{date_range_str}...")
     
     try:
+        # For date ranges, fetch more articles to allow pagination
+        # Fetch up to 100 articles (NewsAPI max) when date filtering is active
+        fetch_limit = 100 if (from_date or to_date) else limit
         # Fetch news from NewsAPI with date filtering
-        articles = await news_service.fetch_top_tech_news(limit=limit, from_date=from_date, to_date=to_date)
+        articles = await news_service.fetch_top_tech_news(limit=fetch_limit, from_date=from_date, to_date=to_date)
         
         if not articles:
             raise HTTPException(status_code=404, detail="No articles found for the specified date range")
@@ -189,7 +217,7 @@ async def get_news(
         # Generate AI summaries
         summarized_articles = await ai_service.summarize_articles_batch(articles)
         
-        # Extract trending topics
+        # Extract trending topics (use full article data including summaries)
         topics = topic_extractor.extract_topics(summarized_articles)
         print(f"📊 Extracted {len(topics)} trending topics: {', '.join(topics)}")
         
@@ -198,14 +226,24 @@ async def get_news(
         cache[cache_key]["timestamp"] = datetime.now()
         cache[cache_key]["ttl"] = int(os.getenv("CACHE_TTL", 900))
         
+        # Pagination
+        all_articles = cache[cache_key]["articles"]
+        total_articles = len(all_articles)
+        total_pages = (total_articles + limit - 1) // limit if total_articles > 0 else 1
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        paginated_articles = all_articles[start_idx:end_idx]
+        
         print(f"✅ Successfully processed {len(summarized_articles)} articles")
         
         return NewsResponse(
-            articles=cache[cache_key]["articles"][:limit],
-            count=len(cache[cache_key]["articles"][:limit]),
+            articles=paginated_articles,
+            count=len(paginated_articles),
             cached=False,
             cache_age=0,
-            topics=topics
+            topics=topics,
+            total_pages=total_pages,
+            current_page=page
         )
         
     except HTTPException:

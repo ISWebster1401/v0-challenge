@@ -18,6 +18,8 @@ class NewsResponse(BaseModel):
     cached: bool
     cache_age: Optional[int] = None
     topics: list[str] = []
+    total_pages: int = 1
+    current_page: int = 1
 
 class HealthResponse(BaseModel):
     status: str
