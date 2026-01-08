@@ -1,6 +1,6 @@
 # 🚀 Tech News Summarizer
 
-> **🌐 Live Demo:** https://v0-challenge-five.vercel.app  
+> **🌐 Live Demo:** https://v0-challenge-one.vercel.app
 > **📡 API Docs:** https://your-backend.railway.app/docs
 
 
