@@ -12,7 +12,6 @@ from models.schemas import Article, NewsResponse, HealthResponse, FullSummaryReq
 from services.news_service import NewsService
 from services.ai_service import AIService
 from services.web_scraper import WebScraper
-from services.topic_extractor import TopicExtractor
 
 # Load environment variables
 load_dotenv()
@@ -36,7 +35,6 @@ RATE_LIMIT_WINDOW = 60  # seconds
 news_service = NewsService(api_key=os.getenv("NEWS_API_KEY"))
 ai_service = AIService(api_key=os.getenv("OPENAI_API_KEY"))
 web_scraper = WebScraper()
-topic_extractor = TopicExtractor()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -63,14 +61,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_cache_key(from_date: Optional[date] = None, to_date: Optional[date] = None) -> str:
-    """Generate cache key based on date range"""
+def get_cache_key_str(from_date: Optional[str] = None, to_date: Optional[str] = None) -> str:
+    """Generate cache key based on date range (using string dates)"""
     if from_date and to_date:
-        return f"{from_date.isoformat()}_{to_date.isoformat()}"
+        return f"{from_date}_{to_date}"
     elif from_date:
-        return f"{from_date.isoformat()}_"
+        return f"{from_date}_"
     elif to_date:
-        return f"_{to_date.isoformat()}"
+        return f"_{to_date}"
     return "default"
 
 def is_cache_valid(cache_key: str) -> bool:
@@ -132,8 +130,8 @@ async def health_check():
 async def get_news(
     limit: int = 10, 
     force_refresh: bool = False,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     page: int = 1
 ):
     """
@@ -142,8 +140,8 @@ async def get_news(
     Args:
         limit: Number of articles per page (1-100)
         force_refresh: Force cache refresh
-        from_date: Filter articles published on or after this date (YYYY-MM-DD)
-        to_date: Filter articles published on or before this date (YYYY-MM-DD)
+        from_date: Filter articles published on or after this date (YYYY-MM-DD string)
+        to_date: Filter articles published on or before this date (YYYY-MM-DD string)
         page: Page number (starts at 1)
         
     Returns:
@@ -157,12 +155,18 @@ async def get_news(
     if page < 1:
         raise HTTPException(status_code=400, detail="Page must be >= 1")
     
-    # Validate date range
-    if from_date and to_date and from_date > to_date:
-        raise HTTPException(status_code=400, detail="from_date must be before or equal to to_date")
+    # Validate date range (convert strings to dates for comparison)
+    if from_date and to_date:
+        try:
+            from_dt = datetime.strptime(from_date, "%Y-%m-%d").date()
+            to_dt = datetime.strptime(to_date, "%Y-%m-%d").date()
+            if from_dt > to_dt:
+                raise HTTPException(status_code=400, detail="from_date must be before or equal to to_date")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     
-    # Generate cache key based on date range
-    cache_key = get_cache_key(from_date, to_date)
+    # Generate cache key based on date range (use strings directly)
+    cache_key = get_cache_key_str(from_date, to_date)
     
     # Check cache
     if is_cache_valid(cache_key) and not force_refresh:
@@ -170,16 +174,23 @@ async def get_news(
         cache_entry = cache[cache_key]
         all_cached_articles = cache_entry["articles"]
         
-        # Extract topics from cached articles (use full article data)
-        cached_articles_dict = [
-            {
-                "title": article.title,
-                "summary": article.summary,
-                "description": article.description or ""
-            } 
-            for article in all_cached_articles
-        ]
-        topics = topic_extractor.extract_topics(cached_articles_dict)
+        # Get cached topics if available, otherwise extract from titles
+        if "topics" in cache_entry and cache_entry["topics"]:
+            topics = cache_entry["topics"]
+        else:
+            # Extract topics from cached article titles using AI
+            cached_titles = [article.title for article in all_cached_articles]
+            if cached_titles:
+                loop = asyncio.get_event_loop()
+                topics = await loop.run_in_executor(
+                    None,
+                    ai_service.extract_topics_from_titles,
+                    cached_titles
+                )
+                # Cache topics for future use
+                cache_entry["topics"] = topics
+            else:
+                topics = []
         
         # Pagination
         total_articles = len(all_cached_articles)
@@ -205,24 +216,32 @@ async def get_news(
         # For date ranges, fetch more articles to allow pagination
         # Fetch up to 100 articles (NewsAPI max) when date filtering is active
         fetch_limit = 100 if (from_date or to_date) else limit
-        # Fetch news from NewsAPI with date filtering
+        # Fetch news from NewsAPI with date filtering (dates are already strings)
         articles = await news_service.fetch_top_tech_news(limit=fetch_limit, from_date=from_date, to_date=to_date)
         
         if not articles:
             raise HTTPException(status_code=404, detail="No articles found for the specified date range")
         
         print(f"📰 Fetched {len(articles)} articles")
-        print("🤖 Generating AI summaries...")
         
+        # Extract topics from titles BEFORE summarization (saves API costs)
+        article_titles = [article["title"] for article in articles]
+        print("🤖 Extracting topics from titles...")
+        loop = asyncio.get_event_loop()
+        topics = await loop.run_in_executor(
+            None,
+            ai_service.extract_topics_from_titles,
+            article_titles
+        )
+        print(f"📊 Extracted {len(topics)} trending topics: {', '.join(topics)}")
+        
+        print("🤖 Generating AI summaries...")
         # Generate AI summaries
         summarized_articles = await ai_service.summarize_articles_batch(articles)
         
-        # Extract trending topics (use full article data including summaries)
-        topics = topic_extractor.extract_topics(summarized_articles)
-        print(f"📊 Extracted {len(topics)} trending topics: {', '.join(topics)}")
-        
         # Update cache for this date range
         cache[cache_key]["articles"] = [Article(**article) for article in summarized_articles]
+        cache[cache_key]["topics"] = topics  # Cache topics with articles
         cache[cache_key]["timestamp"] = datetime.now()
         cache[cache_key]["ttl"] = int(os.getenv("CACHE_TTL", 900))
         
@@ -253,9 +272,9 @@ async def get_news(
         raise HTTPException(status_code=500, detail=f"Error fetching news: {str(e)}")
 
 @app.post("/api/refresh")
-async def refresh_cache(from_date: Optional[date] = None, to_date: Optional[date] = None):
+async def refresh_cache(from_date: Optional[str] = None, to_date: Optional[str] = None):
     """Force refresh the news cache for a specific date range"""
-    cache_key = get_cache_key(from_date, to_date)
+    cache_key = get_cache_key_str(from_date, to_date)
     cache[cache_key]["articles"] = []
     cache[cache_key]["timestamp"] = None
     return {"message": f"Cache cleared for date range: {cache_key}", "status": "success"}

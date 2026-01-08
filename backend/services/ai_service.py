@@ -1,6 +1,8 @@
 from openai import OpenAI
 from typing import List, Dict
 import asyncio
+import json
+import re
 
 class AIService:
     def __init__(self, api_key: str):
@@ -104,4 +106,77 @@ Comprehensive Summary:"""
         except Exception as e:
             print(f"Error generating full summary: {e}")
             raise Exception(f"Failed to generate summary: {str(e)}")
+    
+    def extract_topics_from_titles(self, titles: List[str]) -> List[str]:
+        """
+        Extract 5-8 main topics from article titles using OpenAI
+        
+        Args:
+            titles: List of article titles
+            
+        Returns:
+            List of 5-8 unique topic names
+        """
+        if not titles:
+            return []
+        
+        # Combine titles into a single string
+        titles_text = "\n".join([f"- {title}" for title in titles[:50]])  # Limit to 50 titles to avoid token limits
+        
+        prompt = f"""Analyze these tech news titles and extract 5-8 main topics/themes. 
+Return ONLY a JSON array of topics. Topics should be from this list: AI, Crypto, Hardware, Software, Startups, Gaming, Security, Mobile, Cloud, Web3, Robotics, Social Media, Space, Electric Vehicles, etc.
+
+Example: ["AI", "Hardware", "Gaming"]
+
+Here are the titles:
+{titles_text}
+
+Return ONLY the JSON array, nothing else:"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a tech news analyst. Extract main topics from news titles. Return only a JSON array."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=200,
+                temperature=0.3  # Lower temperature for more consistent results
+            )
+            
+            response_text = response.choices[0].message.content.strip()
+            
+            # Parse JSON response (handle both array and string formats)
+            # Try to extract JSON array from response
+            json_match = re.search(r'\[.*?\]', response_text, re.DOTALL)
+            if json_match:
+                topics = json.loads(json_match.group())
+            else:
+                # Try parsing entire response as JSON
+                topics = json.loads(response_text)
+            
+            # Ensure it's a list
+            if isinstance(topics, str):
+                topics = json.loads(topics)
+            
+            if not isinstance(topics, list):
+                topics = []
+            
+            # Remove duplicates and limit to 8
+            unique_topics = []
+            seen = set()
+            for topic in topics:
+                topic_str = str(topic).strip()
+                if topic_str and topic_str not in seen:
+                    seen.add(topic_str)
+                    unique_topics.append(topic_str)
+            
+            # Return 5-8 topics
+            return unique_topics[:8] if len(unique_topics) >= 5 else unique_topics
+            
+        except Exception as e:
+            print(f"Error extracting topics with OpenAI: {e}")
+            print(f"Response was: {response_text if 'response_text' in locals() else 'N/A'}")
+            # Fallback: return empty list (frontend can handle this)
+            return []
 

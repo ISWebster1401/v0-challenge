@@ -1,6 +1,6 @@
 import httpx
 import hashlib
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
 class NewsService:
@@ -8,84 +8,132 @@ class NewsService:
         self.api_key = api_key
         self.base_url = "https://newsapi.org/v2"
     
-    async def fetch_top_tech_news(self, limit: int = 10, from_date: Optional[date] = None, to_date: Optional[date] = None) -> List[Dict]:
+    def _titles_similar(self, title1: str, title2: str) -> bool:
         """
-        Fetch top tech news from NewsAPI with optional date filtering
+        Check if two titles are >80% similar using Jaccard similarity
+        
+        Args:
+            title1: First article title
+            title2: Second article title
+            
+        Returns:
+            True if titles are similar (>80% word overlap)
+        """
+        words1 = set(title1.lower().split())
+        words2 = set(title2.lower().split())
+        if not words1 or not words2:
+            return False
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        similarity = len(intersection) / len(union)
+        return similarity > 0.8
+    
+    async def fetch_top_tech_news(
+        self, 
+        limit: int = 10,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None
+    ) -> List[Dict]:
+        """
+        Fetch tech news from NewsAPI
+        Uses /everything for date ranges, /top-headlines for recent news
         
         Args:
             limit: Number of articles to fetch (max 100)
-            from_date: Filter articles published on or after this date (YYYY-MM-DD)
-            to_date: Filter articles published on or before this date (YYYY-MM-DD)
+            from_date: Filter articles published on or after this date (YYYY-MM-DD string)
+            to_date: Filter articles published on or before this date (YYYY-MM-DD string)
             
         Returns:
-            List of article dictionaries filtered by date range
+            List of unique article dictionaries
         """
-        # For date filtering, we need to use the 'everything' endpoint with date parameters
-        # NewsAPI requires both from and to dates for date filtering
-        params = {
-            "apiKey": self.api_key,
-            "language": "en",
-            "pageSize": min(limit, 100),
-            "sortBy": "publishedAt"
-        }
-        
-        # If dates are provided, use 'everything' endpoint with date filters
-        if from_date or to_date:
-            # Default to last 7 days if only one date provided
-            if from_date and not to_date:
-                to_date = date.today()
-            elif to_date and not from_date:
-                # Go back 7 days from to_date
-                from_date = to_date - timedelta(days=7)
-            
-            # Convert dates to ISO format strings
-            params["from"] = from_date.isoformat()
-            params["to"] = to_date.isoformat()
-            params["q"] = "technology OR tech OR AI OR software OR programming"
-            endpoint = f"{self.base_url}/everything"
-        else:
-            # No date filtering - use top-headlines
-            params["category"] = "technology"
-            endpoint = f"{self.base_url}/top-headlines"
-        
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                endpoint,
-                params=params,
-                timeout=30.0
-            )
+            # CRITICAL: Use different endpoints based on date filtering
+            if from_date or to_date:
+                # Use /everything for historical data
+                url = f"{self.base_url}/everything"
+                
+                # Calculate default dates if not provided
+                if not to_date:
+                    to_date = datetime.now().strftime("%Y-%m-%d")
+                if not from_date:
+                    # Default to 7 days ago if only to_date provided
+                    from_dt = datetime.now() - timedelta(days=7)
+                    from_date = from_dt.strftime("%Y-%m-%d")
+                
+                params = {
+                    "apiKey": self.api_key,
+                    "q": "(technology OR tech OR AI OR startup OR software OR hardware) AND (announcement OR launch OR release OR update OR report)",
+                    "language": "en",
+                    "sortBy": "publishedAt",
+                    "from": from_date,
+                    "to": to_date,
+                    "pageSize": min(limit * 3, 100),  # Fetch 3x more for deduplication
+                    "domains": "techcrunch.com,theverge.com,wired.com,arstechnica.com,engadget.com,cnet.com,zdnet.com,mashable.com"
+                }
+            else:
+                # Use /top-headlines for recent news (last 24h)
+                url = f"{self.base_url}/top-headlines"
+                params = {
+                    "apiKey": self.api_key,
+                    "category": "technology",
+                    "language": "en",
+                    "pageSize": limit
+                }
+            
+            print(f"🔍 Fetching from: {url}")
+            print(f"📅 Date range: {from_date} to {to_date}" if from_date else "📅 Recent news (24h)")
+            
+            response = await client.get(url, params=params, timeout=30.0)
             response.raise_for_status()
             data = response.json()
             
             articles = []
+            seen_urls = set()
+            seen_titles = []
+            
             for article in data.get("articles", []):
-                # Parse published date
-                try:
-                    published_at = datetime.fromisoformat(article["publishedAt"].replace("Z", "+00:00"))
-                except:
+                # Skip if no URL
+                if not article.get("url"):
                     continue
                 
-                # Additional client-side date filtering if using 'everything' endpoint
-                if from_date or to_date:
-                    article_date = published_at.date()
-                    if from_date and article_date < from_date:
-                        continue
-                    if to_date and article_date > to_date:
-                        continue
+                # Deduplication by URL
+                if article["url"] in seen_urls:
+                    print(f"⚠️ Duplicate URL: {article.get('title', '')[:50]}...")
+                    continue
                 
-                # Generate unique ID from URL
+                # Deduplication by similar title
+                title = article.get("title", "")
+                is_duplicate = False
+                for seen_title in seen_titles:
+                    if self._titles_similar(title, seen_title):
+                        print(f"⚠️ Similar title: {title[:50]}...")
+                        is_duplicate = True
+                        break
+                
+                if is_duplicate:
+                    continue
+                
+                # Generate unique ID
                 article_id = hashlib.md5(article["url"].encode()).hexdigest()[:12]
                 
+                # Add to unique articles
                 articles.append({
                     "id": article_id,
-                    "title": article["title"],
+                    "title": title,
                     "description": article.get("description", ""),
                     "url": article["url"],
                     "source": article["source"]["name"],
                     "publishedAt": article["publishedAt"],
                     "imageUrl": article.get("urlToImage")
                 })
+                
+                seen_urls.add(article["url"])
+                seen_titles.append(title)
+                
+                # Stop when we have enough unique articles
+                if len(articles) >= limit:
+                    break
             
-            # Limit results to requested amount
-            return articles[:limit]
+            print(f"✅ Fetched {len(articles)} unique articles (from {len(data.get('articles', []))} total)")
+            return articles
 
